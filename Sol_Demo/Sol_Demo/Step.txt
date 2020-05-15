@@ -1,0 +1,126 @@
+﻿Step 1:
+Add the following package from nuget package
+AspNetCore.HealthChecks.UI
+
+Step 2:
+Create a custom Health checker handler class, In this demo I have to check database connection healty or not.
+
+2.1
+Create a DatabaseHealthCheckHandler class inside the HealthChecker folder.
+
+public class DatabaseHealthCheckHandler : IHealthCheck
+    {
+        Task<HealthCheckResult> IHealthCheck.CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken)
+        {
+            string _connectionString = @"Data Source=DESKTOP-MOL1H66\IDEATORS;Initial Catalog=Db;Integrated Security=True;Connect Timeout=60;Encrypt=False;TrustServerCertificate=False;ApplicationIntent=ReadWrite;MultiSubnetFailover=False";
+
+            using (var connection = new SqlConnection(_connectionString))
+            {
+                try
+                {
+                    connection.Open();
+                }
+                catch (SqlException)
+                {
+                    return Task.FromResult(HealthCheckResult.Unhealthy());
+                }
+            }
+
+            return Task.FromResult(HealthCheckResult.Healthy());
+        }
+    }
+
+2.2
+Create a Check Google Web Site Handler Class inside the HealthChecker folder
+public class GoogleWebSiteHealthCheckerHandler : IHealthCheck
+    {
+        async Task<HealthCheckResult> IHealthCheck.CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken)
+        {
+            using (var httpClient=new HttpClient())
+            {
+                var response = await httpClient.GetAsync("https://www.google.com");
+
+                if (response.IsSuccessStatusCode)
+                {
+                    return await Task.FromResult(HealthCheckResult.Healthy());
+                }
+                else
+                {
+                    return await Task.FromResult(HealthCheckResult.Unhealthy());
+                }
+            }
+        }
+    }
+
+Step 3
+Configure Health Check UI With Health Check service
+
+public void ConfigureServices(IServiceCollection services)
+        {
+            services.AddControllers();
+
+            services.AddSingleton(typeof(DatabaseHealthCheckHandler));
+            services.AddSingleton(typeof(GoogleWebSiteHealthCheckerHandler));
+
+            services
+                .AddHealthChecksUI()
+                .AddHealthChecks()
+                .AddCheck<DatabaseHealthCheckHandler>("database-health-check")
+                .AddCheck<GoogleWebSiteHealthCheckerHandler>("google-website")
+                .Services
+                .AddControllers();
+             
+        }
+
+Step 4
+Configure Health Check UI with health Check in configure function
+
+app.UseEndpoints(endpoints =>
+            {
+                endpoints.MapControllers();
+
+                endpoints
+                    .MapHealthChecks("/healthz", new HealthCheckOptions()
+                    {
+                        Predicate = _ => true,
+                        ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
+                    });
+                endpoints.MapHealthChecksUI();
+                    
+                    
+            });
+
+
+Step 5
+Configure health check json in  appsettings.json
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft": "Warning",
+      "Microsoft.Hosting.Lifetime": "Information"
+    }
+  },
+  "AllowedHosts": "*",
+  "HealthChecks-UI": {
+    "HealthChecks": [
+      {
+        "Name": "Health Check Demo",
+        "Uri": "http://localhost:5455/healthz"
+      }
+    ],
+    "Webhooks": [
+      {
+        "Name": "",
+        "Uri": "",
+        "Payload": "",
+        "RestoredPayload": ""
+      }
+    ],
+    "EvaluationTimeOnSeconds": 10,
+    "MinimumSecondsBetweenFailureNotifications": 60
+  }
+}
+
+Step 6
+HealthChecksUI can be accessed on http://localhost:5455/healthchecks-ui
